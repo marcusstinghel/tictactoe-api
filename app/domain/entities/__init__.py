@@ -1,7 +1,7 @@
-from typing import List, Literal, Dict, Tuple
+from typing import Dict, List
 
-Board = Tuple[List[Literal[-1, 0, 1]], List[Literal[-1, 0, 1]], List[Literal[-1, 0, 1]]]
-Movement = Dict[Literal['column', 'row', 'value'], int]
+Board = List[List[int]]
+Movement = Dict[str, int]
 Movements = List[Movement]
 
 from app.domain.entities.player import Player
