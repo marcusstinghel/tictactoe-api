@@ -14,7 +14,7 @@ PY=C:/v/ttt/Scripts/python          # venv curto fora do repo
 ```
 (PowerShell equivalente: `subst T: "<caminho>"; Set-Location T:\`.) Ao final: `cmd //c subst T: //D`.
 
-**Linha de base dos testes de aceite**: commit `c7334272f320f40fb913cafca67a04d38f0edf2b` (ver AC-33).
+**Linha de base dos testes de aceite**: commit `1b85ac4aeb4f83ff8353f5b89352108a0ac31aae` (ver AC-33).
 
 ---
 
@@ -87,7 +87,7 @@ git grep -n -E '[A-Za-z]:[\\/]+Users[\\/]+|/home/[A-Za-z]|/Users/[A-Za-z]' -- . 
 | AC-30 | Workflow de CI roda pytest no 3.13 com torch CPU | `ls .github/workflows/*.yml && $PY -m pytest tests/acceptance/test_repo_hygiene.py -k ci_workflow -q` | arquivo listado e `1 passed` |
 | AC-31 | `main.py` sem `debug=True`; `create_app({"TESTING": True})` sobe sem `.env` | `$PY -m pytest tests/acceptance/test_repo_hygiene.py -k "debugger or dotenv_or_author" -q` | `2 passed` |
 | AC-32 | Servidor real sobe (`python main.py` em dir temporário, `PORT` livre) e cumpre fluxo completo por HTTP (health, registrar, start, 5 jogadas até vitória, treinar, ai-move, estatísticas) | `$PY tests/acceptance/smoke_server.py` | imprime `SMOKE OK`, rc 0 |
-| AC-33 | `tests/acceptance/` idêntico à linha de base | `git diff --exit-code c7334272f320f40fb913cafca67a04d38f0edf2b -- tests/acceptance && test -z "$(git status --porcelain -- tests/acceptance)"` | rc 0 (sem diff, sem arquivos novos/não rastreados) |
+| AC-33 | `tests/acceptance/` idêntico à linha de base | `git diff --exit-code 1b85ac4aeb4f83ff8353f5b89352108a0ac31aae -- tests/acceptance && test -z "$(git status --porcelain -- tests/acceptance)"` | rc 0 (sem diff, sem arquivos novos/não rastreados) |
 | AC-34 | Suíte de aceite inteira | `$PY -m pytest tests/acceptance -q` | `81 passed` |
 | AC-35 | Branch correta, nada enviado | `git rev-parse --abbrev-ref HEAD` | `refactor/tictactoe-api`; nenhum `git push` executado na implementação |
 
