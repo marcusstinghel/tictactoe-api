@@ -1,13 +1,17 @@
+from typing import Mapping, Optional
+
 from flask import Flask
-from app.interface.api.routes import player_bp, game_bp, ai_bp
+
+from app.container import build_container
+from app.interface.api.controllers import api
+from app.interface.api.errors import register_error_handlers
 
 
-def create_app():
+def create_app(config: Optional[Mapping] = None) -> Flask:
     app = Flask(__name__)
-    app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
-
-    app.register_blueprint(player_bp, url_prefix='/api/')
-    app.register_blueprint(game_bp, url_prefix='/api/')
-    app.register_blueprint(ai_bp, url_prefix='/api/')
-
+    if config:
+        app.config.update(config)
+    app.extensions["container"] = build_container(config)
+    app.register_blueprint(api)
+    register_error_handlers(app)
     return app
