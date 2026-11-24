@@ -1,142 +1,78 @@
-import ast
-from typing import Literal, Union, List, Type
-from sqlalchemy.orm import Session
+from typing import List, Optional
 
-from app.domain.entities import Game, Board, Movements
-from app.infra.db.entities import Game as GameDBEntity
-from app.infra.db.repositories import decorators as dc
+from sqlalchemy import select
+
+from app.domain.entities import Game
+from app.domain.exceptions import GameNotFound
 from app.domain.repositories import GameRepositoryInterface
+from app.infra.db.entities import Game as GameRow
+
+
+def _to_entity(row: GameRow) -> Game:
+    return Game(
+        id=row.id,
+        state=row.state,
+        player_id=row.player_id,
+        movements=row.movements,
+        winner=row.winner,
+        board=row.board,
+    )
 
 
 class GameRepository(GameRepositoryInterface):
-    session: Session
 
-    @classmethod
-    @dc.use_db_session
-    def create_game(cls,
-                    player_id: int,
-                    board: Board,
-                    state: Literal['in_progress', 'finished'],
-                    winner: Literal[-1, 0, 1],
-                    movements: Union[Movements, None]
-                    ) -> Game:
-        board = str(board)
-        movements = str(movements)
-        db_game = GameDBEntity(
-            player_id=player_id,
-            board=board,
-            state=state,
-            movements=movements,
-            winner=winner,
-        )
-        cls.session.add(db_game)
-        cls.session.commit()
-        game_board_formatted = ast.literal_eval(db_game.board)
-        game_movements_formatted = ast.literal_eval(db_game.movements) if db_game.movements is not 'None' else None
-        game_state_formatted: Literal['in_progress', 'finished'] = db_game.state if db_game.state in ['in_progress',
-                                                                                                      'finished'] else 'finished'
-        game_winner_formatted: Literal[-1, 0, 1] = db_game.winner if db_game.winner in [-1, 0, 1] else 0
-        game = Game(
-            id=db_game.id,
-            board=game_board_formatted,
-            state=game_state_formatted,
-            player_id=db_game.player_id,
-            movements=game_movements_formatted,
-            winner=game_winner_formatted
-        )
-        return game
+    def __init__(self, session_factory):
+        self._session_factory = session_factory
 
-    @classmethod
-    @dc.use_db_session
-    def get_game(cls, id: int) -> Game:
-        db_game = cls.session.query(GameDBEntity).get(id)
-        game_board_formatted = ast.literal_eval(db_game.board)
-        game_movements_formatted = ast.literal_eval(db_game.movements) if db_game.movements is not 'None' else None
-        game_winner_formatted: Literal[-1, 0, 1] = db_game.winner if db_game.winner in [-1, 0, 1] else 0
-        game = Game(
-            id=db_game.id,
-            board=game_board_formatted,
-            state=db_game.state,
-            player_id=db_game.player_id,
-            movements=game_movements_formatted,
-            winner=game_winner_formatted
+    def create_game(self, game: Game) -> Game:
+        row = GameRow(
+            board=[list(r) for r in game.board],
+            state=game.state,
+            player_id=game.player_id,
+            movements=[dict(m) for m in game.movements],
+            winner=game.winner,
         )
-        return game
+        with self._session_factory.begin() as session:
+            session.add(row)
+            session.flush()
+            return _to_entity(row)
 
-    @classmethod
-    @dc.use_db_session
-    def get_games(cls, games_amount: int) -> List[Game]:
-        db_games = cls.session.query(GameDBEntity).limit(games_amount).all()
-        games = []
-        for db_game in db_games:
-            game_board_formatted = ast.literal_eval(str(db_game.board))
-            game_state_formatted: Literal['in_progress', 'finished'] = db_game.state if db_game.state in ['in_progress',
-                                                                                                          'finished'] else 'finished'
-            game_movements_formatted = ast.literal_eval(str(db_game.movements)) if db_game.movements != 'None' else None
-            game_winner_formatted: Literal[-1, 0, 1] = db_game.winner if db_game.winner in [-1, 0, 1] else 0
-            game = Game(
-                id=int(str(db_game.id)),
-                board=game_board_formatted,
-                state=game_state_formatted,
-                player_id=int(str(db_game.player_id)),
-                movements=game_movements_formatted,
-                winner=game_winner_formatted
-            )
-            games.append(game)
-        return games
+    def get_in_progress_game(self, player_id: int) -> Optional[Game]:
+        statement = (select(GameRow)
+                     .where(GameRow.player_id == player_id, GameRow.state == 'in_progress')
+                     .order_by(GameRow.id.desc())
+                     .limit(1))
+        return self._first(statement)
 
-    @classmethod
-    @dc.use_db_session
-    def get_in_progress_game(cls, player_id: int) -> Game:
-        db_game: Type[GameDBEntity] = cls.session.query(GameDBEntity).filter(
-            GameDBEntity.player_id == player_id,
-            GameDBEntity.state == 'in_progress'
-        ).first()
-        if db_game is None:
-            raise ValueError('There is no game in progress')
-        game_board_formatted = ast.literal_eval(str(db_game.board))
-        game_movements_formatted = ast.literal_eval(str(db_game.movements)) if db_game.movements is not 'None' else None
-        game_state_formatted: Literal['in_progress', 'finished'] = db_game.state if db_game.state in ['in_progress',
-                                                                                                      'finished'] else 'finished'
-        game_winner_formatted: Literal[-1, 0, 1] = db_game.winner if db_game.winner in [-1, 0, 1] else 0
-        game = Game(
-            id=int(str(db_game.id)),
-            board=game_board_formatted,
-            state=game_state_formatted,
-            player_id=int(str(db_game.player_id)),
-            movements=game_movements_formatted,
-            winner=game_winner_formatted,
-        )
-        return game
+    def get_latest_game(self, player_id: int) -> Optional[Game]:
+        statement = (select(GameRow)
+                     .where(GameRow.player_id == player_id)
+                     .order_by(GameRow.id.desc())
+                     .limit(1))
+        return self._first(statement)
 
-    @classmethod
-    @dc.use_db_session
-    def update_game(cls,
-                    id: int,
-                    player_id: int,
-                    board: Board,
-                    state: Literal['in_progress', 'finished'],
-                    winner: Literal[-1, 0, 1],
-                    movements: Movements = None,
-                    ) -> Game:
-        db_game = cls.session.query(GameDBEntity).get(id)
-        db_game.player_id = player_id
-        db_game.board = str(board)
-        db_game.state = state
-        db_game.movements = str(movements)
-        db_game.winner = winner
-        cls.session.commit()
-        game_board_formatted = ast.literal_eval(db_game.board)
-        game_movements_formatted = ast.literal_eval(db_game.movements) if db_game.movements is not 'None' else None
-        game_state_formatted: Literal['in_progress', 'finished'] = db_game.state if db_game.state in ['in_progress',
-                                                                                                      'finished'] else 'finished'
-        game_winner_formatted: Literal[-1, 0, 1] = db_game.winner if db_game.winner in [-1, 0, 1] else 0
-        game = Game(
-            id=db_game.id,
-            board=game_board_formatted,
-            state=game_state_formatted,
-            player_id=db_game.player_id,
-            movements=game_movements_formatted,
-            winner=game_winner_formatted,
-        )
-        return game
+    def get_finished_games(self, limit: int) -> List[Game]:
+        statement = (select(GameRow)
+                     .where(GameRow.state == 'finished')
+                     .order_by(GameRow.id.desc())
+                     .limit(limit))
+        with self._session_factory() as session:
+            return [_to_entity(row) for row in session.scalars(statement)]
+
+    def update_game(self, game: Game) -> Game:
+        with self._session_factory.begin() as session:
+            row = session.get(GameRow, game.id)
+            if row is None:
+                raise GameNotFound()
+            # JSON columns need brand new lists: in-place mutation is not detected.
+            row.board = [list(r) for r in game.board]
+            row.movements = [dict(m) for m in game.movements]
+            row.state = game.state
+            row.winner = game.winner
+            session.flush()
+            return _to_entity(row)
+
+    def _first(self, statement) -> Optional[Game]:
+        with self._session_factory() as session:
+            row = session.scalars(statement).first()
+            return _to_entity(row) if row is not None else None
