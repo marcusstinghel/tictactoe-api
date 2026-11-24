@@ -1,12 +1,12 @@
-from app.interface.api import create_app
-from app.infra.settings import EnvVarsHandler
-from app.infra.db.settings import DBMigrationsHandler, DBConnectionHandler
-from app.infra.db.entities import Base
+import os
 
-EnvVarsHandler.read_env_vars('.env')
-database = DBConnectionHandler(EnvVarsHandler.get_db_connection_string())
-DBMigrationsHandler.migrate_all_tables(engine=database.get_engine(), base=Base)
+from app.interface.api import create_app
+
 app = create_app()
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    app.run(
+        host=os.getenv("HOST", "127.0.0.1"),
+        port=int(os.getenv("PORT", "5000")),
+        debug=os.getenv("FLASK_DEBUG") == "1",
+    )
